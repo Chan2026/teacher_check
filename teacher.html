@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成绩管理后台 - 四年级华文天地</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen p-6">
+    <div class="max-w-4xl mx-auto">
+        <header class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">学生成绩看板 👩‍🏫</h1>
+                <p class="text-gray-500">实时查收学生的练习成果</p>
+            </div>
+            <button onclick="location.reload()" class="bg-white border px-4 py-2 rounded-lg shadow-sm hover:bg-gray-50">刷新数据</button>
+        </header>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <table class="w-full text-left">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-6 py-4 text-sm font-bold text-gray-600">学生姓名</th>
+                        <th class="px-6 py-4 text-sm font-bold text-gray-600">练习单元</th>
+                        <th class="px-6 py-4 text-sm font-bold text-gray-600">分数</th>
+                        <th class="px-6 py-4 text-sm font-bold text-gray-600">提交时间</th>
+                    </tr>
+                </thead>
+                <tbody id="score-table" class="divide-y divide-gray-50">
+                    <tr>
+                        <td colspan="4" class="px-6 py-10 text-center text-gray-400 italic">正在努力加载成绩列表中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, collection, query, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+
+        signInAnonymously(auth);
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // 监听数据变化
+                const q = collection(db, 'artifacts', appId, 'public', 'data', 'scores');
+                onSnapshot(q, (snapshot) => {
+                    const table = document.getElementById('score-table');
+                    if (snapshot.empty) {
+                        table.innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-gray-400">目前还没有学生提交成绩哦。</td></tr>';
+                        return;
+                    }
+
+                    // 获取数据并按时间倒序排列
+                    const docs = snapshot.docs.map(doc => doc.data())
+                        .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+
+                    table.innerHTML = docs.map(data => {
+                        const date = data.timestamp ? new Date(data.timestamp.seconds * 1000).toLocaleString() : '刚刚';
+                        const scoreColor = data.score >= (data.total * 0.8) ? 'text-green-600' : 'text-orange-500';
+                        
+                        return `
+                            <tr class="hover:bg-gray-50 transition-colors">
+                                <td class="px-6 py-4 font-bold text-gray-800">${data.studentName}</td>
+                                <td class="px-6 py-4 text-gray-600 text-sm">${data.topic}</td>
+                                <td class="px-6 py-4 font-black ${scoreColor}">${data.score} / ${data.total}</td>
+                                <td class="px-6 py-4 text-gray-400 text-xs">${date}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                }, (error) => {
+                    console.error(error);
+                    document.getElementById('score-table').innerHTML = '<tr><td colspan="4" class="px-6 py-10 text-center text-red-500">加载失败，请检查数据库权限。</td></tr>';
+                });
+            }
+        });
+    </script>
+</body>
+</html>
